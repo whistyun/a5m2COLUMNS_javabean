@@ -7,7 +7,8 @@
 /** 出力時のパッケージ */
 var JAVA_PACKAGE = "com.example";
 
-/** 出力モード
+/** 
+ * 出力モード
  * "MyBatis", "JPA", "ALL"
  */
 var OUTPUT_MODE = "ALL";
@@ -54,7 +55,7 @@ if( !objFSO.FileExists(WScript.Arguments.Item(0)) ){
     WScript.Quit(-1);
 }
 
-// CSVファイル'
+// CSVファイル(大元)
 var csvFile = WScript.Arguments.Item(0);
 // パッケージ名
 var jpack = JAVA_PACKAGE;
@@ -125,14 +126,19 @@ namespace csvload{
 
     /** テーブルの情報 */
     export class TableInfo{
+        /** テーブル名 */
         tableName:string;
+        /** 論理名 */
+        logicalName: string;
+        /** テーブルのカラム一覧 */
         columns:Array<ColumnInfo>;
 
         columnNameMaxLen:number;
         javaNameMaxLen:number;
 
-        constructor(tableName:string, columns:Array<ColumnInfo>){
+        constructor(tableName:string, tableDescription:string, columns:Array<ColumnInfo>){
             this.tableName = tableName;
+            this.logicalName = tableDescription;
             this.columns=[];
             this.columnNameMaxLen = 0;
             this.javaNameMaxLen = 0;
@@ -148,12 +154,19 @@ namespace csvload{
 
     /** カラムの情報 */
     export class ColumnInfo{
+        /** 主キーとしての順番 */
         keyPosition   :string;
+        /** カラムの物理名 */
         columnName    :string;
+        /** カラムの型、ただし、桁数も含む(ex: varchar(23) ) */
         columnType    :string;
+        /** 論理名 */
         logicalName   :string;
+        /** カラム名をjava用に変換したもの */
         javaName      :string;
+        /** java用の型(FQCN) */
         javaType      :string;
+        /** java用の型(.を含まないクラス名) */
         javaTypeSimple:string;
         
         constructor(columnName:string, columnType:string, logicalName:string, keypos:string, typeConvertMap){
@@ -317,9 +330,69 @@ namespace csvload{
         }
     }
 
+    function loadTableDescription(objFSO:any, tableCsvFile:string): {[key:string]: string}{
+        if(! objFSO.FileExists(tableCsvFile) ){
+            // ぞんざいしない場合は何もしない
+            return {};
+        }
+
+        var linesp = null;
+        var csvparser = null;
+        try{
+            linesp = new FileSystemObjectLineProp(objFSO, tableCsvFile);
+            csvparser = new PJCsvRead(linesp);
+
+            var headmap:{[key:string]: number} ={}
+            if(csvparser.hasNext()){
+                // ヘッダ読込
+                var elements = csvparser.next();
+                for(var idx=0; idx<elements.length; ++idx){
+                    switch(elements[idx].toUpperCase()){
+                        case "TABLE_NAME":
+                            headmap["TABLE_NAME"] = idx;
+                            break;
+                        case "LOGICAL_NAME":
+                            headmap["LOGICAL_NAME"] = idx;
+                            break;
+                    }
+                }
+            }
+            else{
+                // ぞんざいしない場合は何もしない
+                return {};
+            }
+
+            // ボディ部読み込み            
+            var tableDescription:{[key:string]: string} ={};
+            while(csvparser.hasNext()){
+                var elements = csvparser.next();
+                var tableName = elements[headmap["TABLE_NAME"]];
+                var logicalName  = elements[headmap["LOGICAL_NAME"]];
+                tableDescription[tableName] = logicalName
+            }    
+            return tableDescription;
+
+        }finally{
+            if(csvparser){
+                csvparser.close();
+                csvparser=null;
+            }
+            else if(linesp){
+                linesp.close();
+                linesp=null;
+            }
+        }
+    }
+
     export function loadcsv(objFSO:any, csvFile:string, typeConvertMap): Array<TableInfo> {
         var linesp = null;
         var csvparser = null;
+
+        // 「a5m2_COLUMNS.csv」以外に、「a5m2_TABLES.csv」がある場合は、
+        // そちらも読み込む
+        var tableCsvFile = objFSO.BuildPath(objFSO.GetParentFolderName(csvFile), "a5m2_TABLES.csv");
+        var tableDescription:{[key:string]: string} =loadTableDescription(objFSO, tableCsvFile);
+
         try{
             linesp = new FileSystemObjectLineProp(objFSO, csvFile);
             csvparser = new PJCsvRead(linesp);
@@ -381,7 +454,10 @@ namespace csvload{
             // TableInfoの生成
             var tableInfo:Array<TableInfo> =[];
             for(var table of tableNames){
-                tableInfo.push(new TableInfo(table, tableInfoBuild[table]));
+                tableInfo.push(
+                    new TableInfo(
+                        table, tableDescription[table],
+                        tableInfoBuild[table]));
             }
             return tableInfo;
         }finally{
@@ -490,6 +566,11 @@ namespace gen{
                 "org.apache.ibatis.annotations.Param"
             ]);
             writer.w("");
+            if(table.logicalName && table.logicalName.length!=0){
+                writer.w('/**');
+                writer.w(' * '+table.logicalName+'用のマッパー');
+                writer.w(' */');
+            }
             writer.w("public interface " + filebase + " {");
             writer.indent();
 
@@ -818,6 +899,11 @@ namespace gen{
 			]);
 
             writer.w("");
+            if(table.logicalName && table.logicalName.length!=0){
+                writer.w('/**');
+                writer.w(' * '+table.logicalName+'用のBean');
+                writer.w(' */');
+            }
             writer.w('@Entity(name = "'+ table.tableName + '")');
             writer.w('public static '+ filebase +' {');
             writer.indent();
@@ -889,3 +975,5 @@ if(mode === "JPA" || mode === "ALL"){
         gen.exportJPABean(table, workDir);
     }    
 }
+
+WScript.Echo("処理完了")

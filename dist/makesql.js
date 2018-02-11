@@ -1,13 +1,14 @@
 /* ************************************************** *\
- *
+ * 
  * 出力設定：DBカラムのデータ型と、オブジェクトの型のマッピング
- *
+ * 
 \* ************************************************** */
 
 /** 出力時のパッケージ */
 var JAVA_PACKAGE = "com.example";
 
-/** 出力モード
+/** 
+ * 出力モード
  * "MyBatis", "JPA", "ALL"
  */
 var OUTPUT_MODE = "ALL";
@@ -51,7 +52,7 @@ if (!objFSO.FileExists(WScript.Arguments.Item(0))) {
     WScript.Echo(errMsg);
     WScript.Quit(-1);
 }
-// CSVファイル'
+// CSVファイル(大元)
 var csvFile = WScript.Arguments.Item(0);
 // パッケージ名
 var jpack = JAVA_PACKAGE;
@@ -116,8 +117,9 @@ var csvload;
 (function (csvload) {
     /** テーブルの情報 */
     var TableInfo = /** @class */ (function () {
-        function TableInfo(tableName, columns) {
+        function TableInfo(tableName, tableDescription, columns) {
             this.tableName = tableName;
+            this.logicalName = tableDescription;
             this.columns = [];
             this.columnNameMaxLen = 0;
             this.javaNameMaxLen = 0;
@@ -272,9 +274,63 @@ var csvload;
         };
         return PJCsvRead;
     }());
+    function loadTableDescription(objFSO, tableCsvFile) {
+        if (!objFSO.FileExists(tableCsvFile)) {
+            // ぞんざいしない場合は何もしない
+            return {};
+        }
+        var linesp = null;
+        var csvparser = null;
+        try {
+            linesp = new FileSystemObjectLineProp(objFSO, tableCsvFile);
+            csvparser = new PJCsvRead(linesp);
+            var headmap = {};
+            if (csvparser.hasNext()) {
+                // ヘッダ読込
+                var elements = csvparser.next();
+                for (var idx = 0; idx < elements.length; ++idx) {
+                    switch (elements[idx].toUpperCase()) {
+                        case "TABLE_NAME":
+                            headmap["TABLE_NAME"] = idx;
+                            break;
+                        case "LOGICAL_NAME":
+                            headmap["LOGICAL_NAME"] = idx;
+                            break;
+                    }
+                }
+            }
+            else {
+                // ぞんざいしない場合は何もしない
+                return {};
+            }
+            // ボディ部読み込み            
+            var tableDescription = {};
+            while (csvparser.hasNext()) {
+                var elements = csvparser.next();
+                var tableName = elements[headmap["TABLE_NAME"]];
+                var logicalName = elements[headmap["LOGICAL_NAME"]];
+                tableDescription[tableName] = logicalName;
+            }
+            return tableDescription;
+        }
+        finally {
+            if (csvparser) {
+                csvparser.close();
+                csvparser = null;
+            }
+            else if (linesp) {
+                linesp.close();
+                linesp = null;
+            }
+        }
+    }
     function loadcsv(objFSO, csvFile, typeConvertMap) {
         var linesp = null;
         var csvparser = null;
+        // 「a5m2_COLUMNS.csv」以外に、「a5m2_TABLES.csv」がある場合は、
+        // そちらも読み込む
+        var tableCsvFile = objFSO.BuildPath(objFSO.GetParentFolderName(csvFile), "a5m2_TABLES.csv");
+        var tableDescription = loadTableDescription(objFSO, tableCsvFile);
         try {
             linesp = new FileSystemObjectLineProp(objFSO, csvFile);
             csvparser = new PJCsvRead(linesp);
@@ -332,7 +388,7 @@ var csvload;
             var tableInfo = [];
             for (var _i = 0, tableNames_1 = tableNames; _i < tableNames_1.length; _i++) {
                 var table = tableNames_1[_i];
-                tableInfo.push(new TableInfo(table, tableInfoBuild[table]));
+                tableInfo.push(new TableInfo(table, tableDescription[table], tableInfoBuild[table]));
             }
             return tableInfo;
         }
@@ -423,6 +479,11 @@ var gen;
                 "org.apache.ibatis.annotations.Param"
             ]);
             writer.w("");
+            if (table.logicalName && table.logicalName.length != 0) {
+                writer.w('/**');
+                writer.w(' * ' + table.logicalName + '用のマッパー');
+                writer.w(' */');
+            }
             writer.w("public interface " + filebase + " {");
             writer.indent();
             writer.w('/**');
@@ -727,6 +788,11 @@ var gen;
                 "javax.persistence.Id"
             ]);
             writer.w("");
+            if (table.logicalName && table.logicalName.length != 0) {
+                writer.w('/**');
+                writer.w(' * ' + table.logicalName + '用のBean');
+                writer.w(' */');
+            }
             writer.w('@Entity(name = "' + table.tableName + '")');
             writer.w('public static ' + filebase + ' {');
             writer.indent();
@@ -798,4 +864,5 @@ if (mode === "JPA" || mode === "ALL") {
         gen.exportJPABean(table, workDir);
     }
 }
+WScript.Echo("処理完了");
 //# sourceMappingURL=makesql.js.map
