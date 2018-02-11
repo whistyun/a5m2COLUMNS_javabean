@@ -1,0 +1,9 @@
+{
+    "compilerOptions": {
+        "target": "es3",
+        "module": "amd",
+        "charset": "utf8",
+        "outDir": "dist",
+        "sourceMap": true
+    }
+}
