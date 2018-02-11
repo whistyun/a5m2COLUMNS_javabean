@@ -1,7 +1,7 @@
 /* ************************************************** *\
- * 
+ *
  * 出力設定：DBカラムのデータ型と、オブジェクトの型のマッピング
- * 
+ *
 \* ************************************************** */
 
 /** 出力時のパッケージ */
@@ -129,6 +129,21 @@ var csvload;
                     this.columns.push(col);
                     this.columnNameMaxLen = Math.max(this.columnNameMaxLen, col.columnName.length);
                     this.javaNameMaxLen = Math.max(this.columnNameMaxLen, col.javaName.length);
+                }
+            }
+            // 主キー探査
+            var primecolsBuff = [];
+            for (var _a = 0, _b = this.columns; _a < _b.length; _a++) {
+                var column = _b[_a];
+                if (column.keyPosition && column.keyPosition.length != 0) {
+                    primecolsBuff[Number(column.keyPosition)] = column;
+                }
+            }
+            this.primeColumns = [];
+            for (var _c = 0, primecolsBuff_1 = primecolsBuff; _c < primecolsBuff_1.length; _c++) {
+                var primcol = primecolsBuff_1[_c];
+                if (primcol) {
+                    this.primeColumns.push(primcol);
                 }
             }
         }
@@ -382,7 +397,7 @@ var csvload;
                     tableNames.push(tableName);
                     tableInfoBuild[tableName] = arry;
                 }
-                arry[ordianlIdx] = new ColumnInfo(columnName, columnType, logicalName, keypos, typeConvertMap);
+                arry[Number(ordianlIdx)] = new ColumnInfo(columnName, columnType, logicalName, keypos, typeConvertMap);
             }
             // TableInfoの生成
             var tableInfo = [];
@@ -493,26 +508,49 @@ var gen;
             writer.w(' *');
             writer.w(' * @return 検索結果');
             writer.w(' */');
-            writer.w('List<Entity> select(@Param("query") Entity query);');
+            writer.w('List<' + (table.primeColumns.length != 0 ? 'EntityWithKey' : 'Entity') + '> select(@Param("query") Entity query);');
             writer.w("");
             writer.w('/**');
             writer.w(' * INSERT文');
             writer.w(' *');
-            writer.w(' * @param insert 挿入項目');
+            writer.w(' * @param entity 挿入項目');
             writer.w(' *');
             writer.w(' * @return 登録行数');
             writer.w(' */');
-            writer.w('List<Entity> insert(@Param("insert") Entity insert);');
+            writer.w('int insert(@Param("entity") Entity entity);');
             writer.w("");
+            if (table.primeColumns.length != 0) {
+                // update
+                writer.w('/**');
+                writer.w(' * UPDATE文');
+                writer.w(' *');
+                writer.w(' * @param entity 更新項目');
+                writer.w(' * @param query 更新条件');
+                writer.w(' *');
+                writer.w(' * @return 更新行数');
+                writer.w(' */');
+                writer.w('int updateByKey(@Param("entity") EntityWithKey entity);');
+                writer.w("");
+                // delete
+                writer.w('/**');
+                writer.w(' * DELETE文');
+                writer.w(' *');
+                writer.w(' * @param query 削除条件');
+                writer.w(' *');
+                writer.w(' * @return 削除件数');
+                writer.w(' */');
+                writer.w('int deleteByKey(@Param("query") EntityWithKey query);');
+                writer.w("");
+            }
             writer.w('/**');
             writer.w(' * UPDATE文');
             writer.w(' *');
-            writer.w(' * @param update 更新項目');
+            writer.w(' * @param entity 更新項目');
             writer.w(' * @param query 更新条件');
             writer.w(' *');
             writer.w(' * @return 更新行数');
             writer.w(' */');
-            writer.w('int updateQuery(@Param("update") Entity update, @Param("query") Entity query);');
+            writer.w('int updateByQuery(@Param("entity") Entity entity, @Param("query") Entity query);');
             writer.w("");
             writer.w('/**');
             writer.w(' * DELETE文');
@@ -521,7 +559,7 @@ var gen;
             writer.w(' *');
             writer.w(' * @return 削除件数');
             writer.w(' */');
-            writer.w('int deleteQuery(@Param("query") Entity query);');
+            writer.w('int deleteByQuery(@Param("query") Entity query);');
             writer.w("");
             writer.w('/**');
             writer.w(' * テーブルの行を示すためのBeanクラス');
@@ -564,6 +602,37 @@ var gen;
             }
             writer.dedent();
             writer.w('}');
+            if (table.primeColumns.length != 0) {
+                var constructorArgs = [];
+                for (var _d = 0, _e = table.primeColumns; _d < _e.length; _d++) {
+                    var column = _e[_d];
+                    var javaNameU = column.javaName.charAt(0).toUpperCase() + column.javaName.substring(1);
+                    constructorArgs.push(column.javaTypeSimple + ' key' + javaNameU);
+                }
+                writer.w('');
+                writer.w('/**');
+                writer.w(' * テーブルの行を示すためのBeanクラス');
+                writer.w(' */');
+                writer.w('public static EntityWithKey extends Entity implements Serializable {');
+                writer.indent();
+                for (var _f = 0, _g = table.primeColumns; _f < _g.length; _f++) {
+                    var column = _g[_f];
+                    var javaNameU = 'key' + column.javaName.charAt(0).toUpperCase() + column.javaName.substring(1);
+                    writer.w('private ' + column.javaTypeSimple + ' ' + javaNameU + ';');
+                }
+                writer.w('');
+                writer.w('public EntityWithKey(' + constructorArgs.join(', ') + ') {');
+                writer.indent();
+                for (var _h = 0, _j = table.primeColumns; _h < _j.length; _h++) {
+                    var column = _j[_h];
+                    var javaNameU = 'key' + column.javaName.charAt(0).toUpperCase() + column.javaName.substring(1);
+                    writer.w('this.' + javaNameU + ' = ' + javaNameU + ';');
+                }
+                writer.dedent();
+                writer.w('}');
+                writer.dedent();
+                writer.w('}');
+            }
             writer.dedent();
             writer.w("}");
         }
@@ -604,9 +673,24 @@ var gen;
             makeResultMapping(writer, table);
             writer.dedent();
             writer.w("</resultMap>");
+            if (table.primeColumns.length != 0) {
+                writer.w('');
+                writer.w('<resultMap id="resultMapEntityWithKey" type="' + fqcn + "$EntityWithKey" + '" extends="resultMapEntity">');
+                writer.indent();
+                writer.w('<constructor>');
+                writer.indent();
+                for (var _i = 0, _a = table.primeColumns; _i < _a.length; _i++) {
+                    var column = _a[_i];
+                    writer.w('<idArg column="' + column.columnName + '" />');
+                }
+                writer.dedent();
+                writer.w('</constructor>');
+                writer.dedent();
+                writer.w("</resultMap>");
+            }
             writer.w("");
             // select
-            writer.w('<select id="select" resultMap="resultMapEntity">');
+            writer.w('<select id="select" resultMap="' + (table.primeColumns.length != 0 ? "resultMapEntityWithKey" : "resultMapEntity") + '">');
             writer.indent();
             makeSelectSql(writer, table);
             writer.dedent();
@@ -619,6 +703,22 @@ var gen;
             writer.dedent();
             writer.w("</insert>");
             writer.w("");
+            if (table.primeColumns.length != 0) {
+                // update
+                writer.w('<update id="updateByKey">');
+                writer.indent();
+                makeUpdateKeySql(writer, table);
+                writer.dedent();
+                writer.w("</update>");
+                writer.w("");
+                // delete
+                writer.w('<delete id="deleteByKey">');
+                writer.indent();
+                makeDeleteKeySql(writer, table);
+                writer.dedent();
+                writer.w("</delete>");
+                writer.w("");
+            }
             // update
             writer.w('<update id="updateByQuery">');
             writer.indent();
@@ -749,8 +849,36 @@ var gen;
             var column = _c[_b];
             var testQuery = "query." + utility.rpad(column.javaName, table.javaNameMaxLen) + "!= null ";
             var queryCol = "AND " + utility.rpad(column.columnName, table.columnNameMaxLen) + " = "
-                + utility.rpad("#{query." + column.javaName + "}", table.javaNameMaxLen + "#{query.}".length);
+                + utility.rpad("#{entity." + column.javaName + "}", table.javaNameMaxLen + "#{entity.}".length);
             out.w('<if test="' + testQuery + '">' + queryCol + '</if>');
+        }
+        out.dedent();
+        out.w("</where>");
+    }
+    function makeUpdateKeySql(out, table) {
+        out.w("UPDATE");
+        out.indent().w(table.tableName).dedent();
+        // 更新項目
+        out.w("<set>");
+        out.indent();
+        for (var _i = 0, _a = table.columns; _i < _a.length; _i++) {
+            var column = _a[_i];
+            var testQuery = "entity." + utility.rpad(column.javaName, table.javaNameMaxLen) + "!= null ";
+            var queryCol = utility.rpad(column.columnName, table.columnNameMaxLen) + " = "
+                + utility.rpad("#{entity." + column.javaName + "}", table.javaNameMaxLen + "#{entity.}".length);
+            out.w('<if test="' + testQuery + '">' + queryCol + ' , </if>');
+        }
+        out.dedent();
+        out.w("</set>");
+        // 条件
+        out.w("<where>");
+        out.indent();
+        for (var _b = 0, _c = table.primeColumns; _b < _c.length; _b++) {
+            var column = _c[_b];
+            var javaNameU = column.javaName.charAt(0).toUpperCase() + column.javaName.substring(1);
+            var queryCol = "AND " + utility.rpad(column.columnName, table.columnNameMaxLen) + " = "
+                + utility.rpad("#{entity.key" + javaNameU + "}", table.javaNameMaxLen + "#{entity.key}".length);
+            out.w(queryCol);
         }
         out.dedent();
         out.w("</where>");
@@ -768,6 +896,23 @@ var gen;
             var queryCol = "AND " + utility.rpad(column.columnName, table.columnNameMaxLen) + " = "
                 + utility.rpad("#{query." + column.javaName + "}", table.javaNameMaxLen + "#{query.}".length);
             out.w('<if test="' + testQuery + '">' + queryCol + '</if>');
+        }
+        out.dedent();
+        out.w("</where>");
+    }
+    function makeDeleteKeySql(out, table) {
+        out.w("DELETE FROM");
+        // テーブル
+        out.indent().w(table.tableName).dedent();
+        // 条件
+        out.w("<where>");
+        out.indent();
+        for (var _i = 0, _a = table.primeColumns; _i < _a.length; _i++) {
+            var column = _a[_i];
+            var javaNameU = column.javaName.charAt(0).toUpperCase() + column.javaName.substring(1);
+            var queryCol = "AND " + utility.rpad(column.columnName, table.columnNameMaxLen) + " = "
+                + utility.rpad("#{query.key" + javaNameU + "}", table.javaNameMaxLen + "#{query.key}".length);
+            out.w(queryCol);
         }
         out.dedent();
         out.w("</where>");

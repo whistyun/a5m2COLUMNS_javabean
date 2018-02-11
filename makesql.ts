@@ -132,6 +132,7 @@ namespace csvload{
         logicalName: string;
         /** テーブルのカラム一覧 */
         columns:Array<ColumnInfo>;
+        primeColumns:Array<ColumnInfo>;
 
         columnNameMaxLen:number;
         javaNameMaxLen:number;
@@ -149,6 +150,21 @@ namespace csvload{
                     this.javaNameMaxLen   = Math.max(this.columnNameMaxLen, col.javaName.length);
                 } 
             }
+
+            // 主キー探査
+            var primecolsBuff = [];
+            for(var column of this.columns){
+                if(column.keyPosition && column.keyPosition.length!=0){
+                    primecolsBuff[Number(column.keyPosition)] = column;
+                }
+            }
+            this.primeColumns = [];
+            for(var primcol of primecolsBuff){
+                if(primcol){
+                    this.primeColumns.push(primcol)
+                }
+            }
+
         }
     }
 
@@ -448,7 +464,7 @@ namespace csvload{
                     tableNames.push(tableName);
                     tableInfoBuild[tableName] = arry;
                 }                
-                arry[ordianlIdx] = new ColumnInfo(columnName, columnType, logicalName, keypos, typeConvertMap);
+                arry[Number(ordianlIdx)] = new ColumnInfo(columnName, columnType, logicalName, keypos, typeConvertMap);
             }
 
             // TableInfoの生成
@@ -581,28 +597,53 @@ namespace gen{
             writer.w(' *');
             writer.w(' * @return 検索結果');
             writer.w(' */');
-            writer.w('List<Entity> select(@Param("query") Entity query);');
+            writer.w('List<' + (table.primeColumns.length!=0? 'EntityWithKey': 'Entity') + '> select(@Param("query") Entity query);');
             writer.w("");
 
             writer.w('/**');
             writer.w(' * INSERT文');
             writer.w(' *');
-            writer.w(' * @param insert 挿入項目');
+            writer.w(' * @param entity 挿入項目');
             writer.w(' *');
             writer.w(' * @return 登録行数');
             writer.w(' */');
-            writer.w('List<Entity> insert(@Param("insert") Entity insert);');
+            writer.w('int insert(@Param("entity") Entity entity);');
             writer.w("");
+
+            if(table.primeColumns.length!=0){
+                // update
+                writer.w('/**');
+                writer.w(' * UPDATE文');
+                writer.w(' *');
+                writer.w(' * @param entity 更新項目');
+                writer.w(' * @param query 更新条件');
+                writer.w(' *');
+                writer.w(' * @return 更新行数');
+                writer.w(' */');
+                writer.w('int updateByKey(@Param("entity") EntityWithKey entity);');
+                writer.w("");
+            
+                // delete
+                writer.w('/**');
+                writer.w(' * DELETE文');
+                writer.w(' *');
+                writer.w(' * @param query 削除条件');
+                writer.w(' *');
+                writer.w(' * @return 削除件数');
+                writer.w(' */');
+                writer.w('int deleteByKey(@Param("query") EntityWithKey query);');
+                writer.w("");
+            }
 
             writer.w('/**');
             writer.w(' * UPDATE文');
             writer.w(' *');
-            writer.w(' * @param update 更新項目');
+            writer.w(' * @param entity 更新項目');
             writer.w(' * @param query 更新条件');
             writer.w(' *');
             writer.w(' * @return 更新行数');
             writer.w(' */');
-            writer.w('int updateQuery(@Param("update") Entity update, @Param("query") Entity query);');
+            writer.w('int updateByQuery(@Param("entity") Entity entity, @Param("query") Entity query);');
             writer.w("");
 
             writer.w('/**');
@@ -612,7 +653,7 @@ namespace gen{
             writer.w(' *');
             writer.w(' * @return 削除件数');
             writer.w(' */');
-            writer.w('int deleteQuery(@Param("query") Entity query);');
+            writer.w('int deleteByQuery(@Param("query") Entity query);');
             writer.w("");
 
             writer.w('/**');
@@ -659,6 +700,36 @@ namespace gen{
             writer.dedent();
             writer.w('}');
 
+            if(table.primeColumns.length!=0){
+                var constructorArgs=[];
+                for(var column of table.primeColumns){
+                    var javaNameU = column.javaName.charAt(0).toUpperCase() + column.javaName.substring(1);
+                    constructorArgs.push(column.javaTypeSimple + ' key' + javaNameU );
+                }
+
+                writer.w('');
+                writer.w('/**');
+                writer.w(' * テーブルの行を示すためのBeanクラス');
+                writer.w(' */');
+                    writer.w('public static EntityWithKey extends Entity implements Serializable {');
+                writer.indent();
+                for(var column of table.primeColumns){
+                    var javaNameU = 'key' + column.javaName.charAt(0).toUpperCase() + column.javaName.substring(1);
+                    writer.w('private '+ column.javaTypeSimple + ' ' + javaNameU + ';');
+                }
+                writer.w('');
+                writer.w('public EntityWithKey(' + constructorArgs.join(', ') + ') {');
+                writer.indent();
+                for(var column of table.primeColumns){
+                    var javaNameU = 'key' + column.javaName.charAt(0).toUpperCase() + column.javaName.substring(1);
+                    writer.w('this.'+ javaNameU +' = ' + javaNameU + ';');
+                }
+                writer.dedent();
+                writer.w('}');
+                writer.dedent();
+                writer.w('}');
+            }
+
             writer.dedent();
             writer.w("}");
 
@@ -699,10 +770,25 @@ namespace gen{
             makeResultMapping(writer, table);
             writer.dedent();
             writer.w("</resultMap>");
+            if(table.primeColumns.length!=0){
+                writer.w('');
+                writer.w('<resultMap id="resultMapEntityWithKey" type="' + fqcn + "$EntityWithKey" + '" extends="resultMapEntity">');
+                writer.indent();
+                writer.w('<constructor>');
+                writer.indent();
+                for(var column of table.primeColumns){
+                    writer.w('<idArg column="' + column.columnName + '" />');
+                }
+                writer.dedent();
+                writer.w('</constructor>');
+                writer.dedent();
+                writer.w("</resultMap>");
+            }
+
             writer.w("");
-    
+
             // select
-            writer.w('<select id="select" resultMap="resultMapEntity">');
+            writer.w('<select id="select" resultMap="'+( table.primeColumns.length!=0? "resultMapEntityWithKey": "resultMapEntity" )  +'">');
             writer.indent();
             makeSelectSql(writer, table);
             writer.dedent();
@@ -717,6 +803,24 @@ namespace gen{
             writer.w("</insert>");
             writer.w("");
     
+            if(table.primeColumns.length!=0){
+                // update
+                writer.w('<update id="updateByKey">');
+                writer.indent();
+                makeUpdateKeySql(writer, table);
+                writer.dedent();
+                writer.w("</update>");
+                writer.w("");
+        
+                // delete
+                writer.w('<delete id="deleteByKey">');
+                writer.indent();
+                makeDeleteKeySql(writer, table);
+                writer.dedent();
+                writer.w("</delete>");
+                writer.w("");
+            }
+
             // update
             writer.w('<update id="updateByQuery">');
             writer.indent();
@@ -856,8 +960,36 @@ namespace gen{
         for(var column of table.columns){
             var testQuery = "query." + utility.rpad(column.javaName, table.javaNameMaxLen) + "!= null ";
             var queryCol  = "AND " + utility.rpad(column.columnName, table.columnNameMaxLen) + " = "
-                          + utility.rpad("#{query." + column.javaName + "}", table.javaNameMaxLen + "#{query.}".length)
+                          + utility.rpad("#{entity." + column.javaName + "}", table.javaNameMaxLen + "#{entity.}".length)
             out.w('<if test="'+testQuery+'">'+queryCol+'</if>');
+        }
+        out.dedent();
+        out.w("</where>");
+    }
+
+    function makeUpdateKeySql(out:ScriptWriter, table: csvload.TableInfo){
+        out.w("UPDATE");
+        out.indent().w(table.tableName).dedent();
+        // 更新項目
+        out.w("<set>");
+        out.indent();
+        for(var column of table.columns){
+            var testQuery = "entity." + utility.rpad(column.javaName, table.javaNameMaxLen) + "!= null ";
+            var queryCol  = utility.rpad(column.columnName, table.columnNameMaxLen) + " = "
+                          + utility.rpad("#{entity." + column.javaName + "}", table.javaNameMaxLen + "#{entity.}".length)
+            out.w('<if test="'+testQuery+'">'+queryCol+' , </if>');
+        }
+        out.dedent();
+        out.w("</set>");
+        // 条件
+        out.w("<where>");
+        out.indent();
+        for(var column of table.primeColumns){
+            var javaNameU = column.javaName.charAt(0).toUpperCase() + column.javaName.substring(1);
+
+            var queryCol  = "AND " + utility.rpad(column.columnName, table.columnNameMaxLen) + " = "
+                          + utility.rpad("#{entity.key" + javaNameU + "}", table.javaNameMaxLen + "#{entity.key}".length)
+            out.w(queryCol);
         }
         out.dedent();
         out.w("</where>");
@@ -875,6 +1007,23 @@ namespace gen{
             var queryCol  = "AND " + utility.rpad(column.columnName, table.columnNameMaxLen) + " = "
                             + utility.rpad("#{query." + column.javaName + "}", table.javaNameMaxLen + "#{query.}".length)
             out.w('<if test="'+testQuery+'">'+queryCol+'</if>');
+        }
+        out.dedent();
+        out.w("</where>");
+    }
+
+    function makeDeleteKeySql(out:ScriptWriter, table: csvload.TableInfo){
+        out.w("DELETE FROM");
+        // テーブル
+        out.indent().w(table.tableName).dedent();
+        // 条件
+        out.w("<where>");
+        out.indent();
+        for(var column of table.primeColumns){
+            var javaNameU = column.javaName.charAt(0).toUpperCase() + column.javaName.substring(1);
+            var queryCol  = "AND " + utility.rpad(column.columnName, table.columnNameMaxLen) + " = "
+                            + utility.rpad("#{query.key" + javaNameU + "}", table.javaNameMaxLen + "#{query.key}".length)
+            out.w(queryCol);
         }
         out.dedent();
         out.w("</where>");
