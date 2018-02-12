@@ -1,0 +1,76 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace='jp.co.java_conf.tyun.mybatistest.MapperInfo'>
+    <resultMap id="resultMapEntity" type="jp.co.java_conf.tyun.mybatistest.MapperInfo$Entity">
+        <result column="Test"    property="test"  />
+    </resultMap>
+    
+    <select id="select" resultMap="resultMapEntity">
+        SELECT
+             Test
+        FROM
+            info
+        <where>
+            <if test="query.test != null ">AND Test  = #{query.test} </if>
+        </where>
+    </select>
+    
+    <insert id="insert">
+        INSERT INTO
+            info
+        (
+             Test
+        )
+        VALUES (
+             #{entity.test}
+        )
+    </insert>
+    
+    <update id="updateByQuery">
+        UPDATE
+            info
+        <set>
+            <if test="entity.test != null ">Test  = #{entity.test}  , </if>
+        </set>
+        <where>
+            <if test="query.test != null ">AND Test  = #{entity.test} </if>
+        </where>
+    </update>
+    
+    <delete id="deleteByQuery">
+        DELETE FROM
+            info
+        <where>
+            <if test="query.test != null ">AND Test  = #{query.test} </if>
+        </where>
+    </delete>
+    
+    <insert id="insertMulti" databaseId="Oracle" >
+        INSERT ALL
+        <foreach item="entity" collection="insertList">
+            INTO info
+            (
+                 Test
+            )
+            VALUES (
+                 #{entity.test}
+            )
+        </foreach>
+        SELECT * FROM DUAL
+    </insert>
+    
+    <insert id="insertMulti">
+        INSERT INTO
+            info
+        (
+             Test
+        )
+        <trim prefix="VALUES " suffixOverrides="," suffix=" " >
+            <foreach item="entity" collection="insertList">
+                (
+                     #{entity.test}
+                ),
+            </foreach>
+        </trim>
+    </insert>
+</mapper>

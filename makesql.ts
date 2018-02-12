@@ -40,6 +40,9 @@ var COLTYPE_JAVATYPE ={
     "datetime2"  : "java.sql.Timestamp"
 }
 
+/** マルチプルインサートを出力するか(要:SQL-92) */
+var FLG_MYBATIS_MULTIPLE_INSERT = true;
+
 /* ************************************************** *\
  * 
  * 以下、処理本文
@@ -639,7 +642,6 @@ namespace gen{
                 writer.w(' * UPDATE文');
                 writer.w(' *');
                 writer.w(' * @param entity 更新項目');
-                writer.w(' * @param query 更新条件');
                 writer.w(' *');
                 writer.w(' * @return 更新行数');
                 writer.w(' */');
@@ -679,10 +681,22 @@ namespace gen{
             writer.w('int deleteByQuery(@Param("query") Entity query);');
             writer.w("");
 
+            if(FLG_MYBATIS_MULTIPLE_INSERT){
+                writer.w('/**');
+                writer.w(' * INSERT MULTIPLE ROW文');
+                writer.w(' *');
+                writer.w(' * @param insertList 登録対象一覧');
+                writer.w(' *');
+                writer.w(' * @return 登録件数');
+                writer.w(' */');
+                writer.w('int insertMulti(@Param("insertList") List<? extends Entity> insertList);');
+                writer.w("");
+            }
+
             writer.w('/**');
             writer.w(' * テーブルの行を示すためのBeanクラス');
             writer.w(' */');
-            writer.w('public static Entity implements Serializable {');
+            writer.w('public static class Entity implements Serializable {');
             writer.indent();
 
             // フィールド
@@ -694,14 +708,14 @@ namespace gen{
 
             // セッターとゲッター
             for(var column of table.columns){
-                var javaNameU = column.javaName.charAt(0).toUpperCase() + column.javaName.substring(1);
+                var javaNameKey = column.javaName.charAt(0).toUpperCase() + column.javaName.substring(1);
 
                 writer.w("/**");
                 writer.w(" * " + column.logicalName + "を設定します");
                 writer.w(" *");
                 writer.w(" * @param " + column.javaName + " " + column.logicalName);
                 writer.w(" */");
-                writer.w("private void set" + javaNameU + "(" + column.javaTypeSimple + " " + column.javaName + ") {");
+                writer.w("public void set" + javaNameKey + "(" + column.javaTypeSimple + " " + column.javaName + ") {");
                 writer.indent();
                 writer.w("this." + column.javaName + " = " + column.javaName + ";");
                 writer.dedent();
@@ -712,7 +726,7 @@ namespace gen{
                 writer.w(" *");
                 writer.w(" * @return " + column.logicalName);
                 writer.w(" */");
-                writer.w("private " + column.javaTypeSimple + " get" + javaNameU + "() {");
+                writer.w("public " + column.javaTypeSimple + " get" + javaNameKey + "() {");
                 writer.indent();
                 writer.w("return this." + column.javaName + ";");
                 writer.dedent();
@@ -726,29 +740,64 @@ namespace gen{
             if(table.primeColumns.length!=0){
                 var constructorArgs=[];
                 for(var column of table.primeColumns){
-                    var javaNameU = column.javaName.charAt(0).toUpperCase() + column.javaName.substring(1);
-                    constructorArgs.push(column.javaTypeSimple + ' key' + javaNameU );
+                    var javaNameKey = 'key' + column.javaName.charAt(0).toUpperCase() + column.javaName.substring(1);
+                    constructorArgs.push(column.javaTypeSimple + ' ' + javaNameKey );
                 }
 
                 writer.w('');
                 writer.w('/**');
                 writer.w(' * テーブルの行を示すためのBeanクラス');
                 writer.w(' */');
-                    writer.w('public static EntityWithKey extends Entity implements Serializable {');
+                    writer.w('public static class EntityWithKey extends Entity implements Serializable {');
                 writer.indent();
+
+                // フィールド
                 for(var column of table.primeColumns){
-                    var javaNameU = 'key' + column.javaName.charAt(0).toUpperCase() + column.javaName.substring(1);
-                    writer.w('private '+ column.javaTypeSimple + ' ' + javaNameU + ';');
+                    var javaNameKey = 'key' + column.javaName.charAt(0).toUpperCase() + column.javaName.substring(1);
+                    writer.w('private '+ column.javaTypeSimple + ' ' + javaNameKey + ';');
                 }
                 writer.w('');
+
+
+                // コンストラクタ
                 writer.w('public EntityWithKey(' + constructorArgs.join(', ') + ') {');
                 writer.indent();
                 for(var column of table.primeColumns){
-                    var javaNameU = 'key' + column.javaName.charAt(0).toUpperCase() + column.javaName.substring(1);
-                    writer.w('this.'+ javaNameU +' = ' + javaNameU + ';');
+                    var javaNameKey = 'key' + column.javaName.charAt(0).toUpperCase() + column.javaName.substring(1);
+                    writer.w('this.'+ javaNameKey +' = ' + javaNameKey + ';');
                 }
                 writer.dedent();
                 writer.w('}');
+
+                // セッターとゲッター
+                for(var column of table.primeColumns){
+                    var javaNameKey = 'key' + column.javaName.charAt(0).toUpperCase() + column.javaName.substring(1);
+                    var javaNameKeyU = javaNameKey.charAt(0).toUpperCase() + javaNameKey.substring(1);
+
+                    writer.w("/**");
+                    writer.w(" * " + column.logicalName + "を設定します");
+                    writer.w(" *");
+                    writer.w(" * @param " + column.javaName + " " + column.logicalName);
+                    writer.w(" */");
+                    writer.w("public void set" + javaNameKeyU + "(" + column.javaTypeSimple + " " + column.javaName + ") {");
+                    writer.indent();
+                    writer.w("this." + javaNameKey + " = " + column.javaName + ";");
+                    writer.dedent();
+                    writer.w("}");
+                    writer.w("");
+                    writer.w("/**");
+                    writer.w(" * " + column.logicalName + "を取得します");
+                    writer.w(" *");
+                    writer.w(" * @return " + column.logicalName);
+                    writer.w(" */");
+                    writer.w("public " + column.javaTypeSimple + " get" + javaNameKeyU + "() {");
+                    writer.indent();
+                    writer.w("return this." + javaNameKey + ";");
+                    writer.dedent();
+                    writer.w("}");
+                    writer.w("");
+                }
+
                 writer.dedent();
                 writer.w('}');
             }
@@ -784,6 +833,8 @@ namespace gen{
         try{
             writer = new ScriptWriter(objFSO.BuildPath(workDir, filebase + ".xml"));
     
+            writer.w('<?xml version="1.0" encoding="UTF-8" ?>');
+            writer.w('<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">');
             writer.w("<mapper namespace='" + fqcn + "'>");
             writer.indent();
     
@@ -800,7 +851,7 @@ namespace gen{
                 writer.w('<constructor>');
                 writer.indent();
                 for(var column of table.primeColumns){
-                    writer.w('<idArg column="' + column.columnName + '" />');
+                    writer.w('<idArg column="' + column.columnName + '" javaType="' + column.javaType + '" />');
                 }
                 writer.dedent();
                 writer.w('</constructor>');
@@ -859,7 +910,22 @@ namespace gen{
             writer.dedent();
             writer.w("</delete>");
             writer.w("");
-    
+
+            if(FLG_MYBATIS_MULTIPLE_INSERT){
+                // insert multi row
+                writer.w('<insert id="insertMulti" databaseId="Oracle" >')
+                writer.indent();
+                makeInsertMultiSqlForOracle(writer, table);
+                writer.dedent();
+                writer.w('</insert>');
+                writer.w('');
+                writer.w('<insert id="insertMulti">');
+                writer.indent();
+                makeInsertMultiSqlForSQL92(writer, table);
+                writer.dedent();
+                writer.w('</insert>');
+            }
+
             writer.dedent();
             writer.w("</mapper>")
         }finally{
@@ -950,7 +1016,8 @@ namespace gen{
         }
         out.dedent();
 
-        out.w(") VALUES (");
+        out.w(")");
+        out.w("VALUES (");
         out.indent();
         var firstValue = true;
         for(var column of table.columns){
@@ -961,6 +1028,77 @@ namespace gen{
         }
         out.dedent();
         out.w(")");
+    }
+
+    function makeInsertMultiSqlForSQL92(out:ScriptWriter, table:csvload.TableInfo){
+        out.w("INSERT INTO");
+        out.indent().w(table.tableName).dedent();
+
+        out.w("(");
+        out.indent();
+        var firstColumn = true;
+        for(var column of table.columns){
+            var prefix = firstColumn? " ": ",";
+            out.w(prefix + column.columnName);
+
+            firstColumn=false;
+        }
+        out.dedent();
+
+        out.w(")");
+
+        out.w('<trim prefix="VALUES " suffixOverrides="," suffix=" " >');
+        out.indent();
+        out.w('<foreach item="entity" collection="insertList">');
+        out.indent();
+        out.w("(");
+        out.indent();
+        var firstValue = true;
+        for(var column of table.columns){
+            var prefix = firstValue? " ": ",";
+            out.w(prefix + "#{entity." + column.javaName + "}");
+
+            firstValue=false;
+        }
+        out.dedent();
+        out.w('),');
+        out.dedent();
+        out.w('</foreach>');
+        out.dedent();
+        out.w("</trim>");
+    }
+
+    function makeInsertMultiSqlForOracle(out:ScriptWriter, table:csvload.TableInfo){
+        out.w('INSERT ALL');
+        out.w('<foreach item="entity" collection="insertList">');
+        out.indent();
+        out.w("INTO " + table.tableName)
+        out.w("(");
+        out.indent();
+        var firstColumn = true;
+        for(var column of table.columns){
+            var prefix = firstColumn? " ": ",";
+            out.w(prefix + column.columnName);
+
+            firstColumn=false;
+        }
+        out.dedent();
+
+        out.w(")");
+        out.w("VALUES (");
+        out.indent();
+        var firstValue = true;
+        for(var column of table.columns){
+            var prefix = firstValue? " ": ",";
+            out.w(prefix + "#{entity." + column.javaName + "}");
+
+            firstValue=false;
+        }
+        out.dedent();
+        out.w(")");
+        out.dedent();
+        out.w('</foreach>');
+        out.w('SELECT * FROM DUAL');
     }
 
     function makeUpdateSql(out:ScriptWriter, table: csvload.TableInfo){
@@ -1077,17 +1215,17 @@ namespace gen{
                 writer.w(' */');
             }
             writer.w('@Entity(name = "'+ table.tableName + '")');
-            writer.w('public static '+ filebase +' {');
+            writer.w('public class '+ filebase +' {');
             writer.indent();
 
             // フィールド
             for(var column of table.columns){
                 writer.w("/** " + column.logicalName + " */");
                 if(column.keyPosition){
-                    writer.w('@Id(name="' +column.columnName + '")')
-                }else{
-                    writer.w('@Column(name="' +column.columnName + '")')
+                    writer.w('@Id');
                 }
+                
+                writer.w('@Column(name="' +column.columnName + '")');
                 writer.w("private " + column.javaTypeSimple + " " + column.javaName + ";");
                 writer.w("");
             }
@@ -1101,7 +1239,7 @@ namespace gen{
                 writer.w(" *");
                 writer.w(" * @param " + column.javaName + " " + column.logicalName);
                 writer.w(" */");
-                writer.w("private void set" + javaNameU + "(" + column.javaTypeSimple + " " + column.javaName + ") {");
+                writer.w("public void set" + javaNameU + "(" + column.javaTypeSimple + " " + column.javaName + ") {");
                 writer.indent();
                 writer.w("this." + column.javaName + " = " + column.javaName + ";");
                 writer.dedent();
@@ -1112,7 +1250,7 @@ namespace gen{
                 writer.w(" *");
                 writer.w(" * @return " + column.logicalName);
                 writer.w(" */");
-                writer.w("private " + column.javaTypeSimple + " get" + javaNameU + "() {");
+                writer.w("public " + column.javaTypeSimple + " get" + javaNameU + "() {");
                 writer.indent();
                 writer.w("return this." + column.javaName + ";");
                 writer.dedent();

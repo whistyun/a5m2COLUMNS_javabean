@@ -40,6 +40,9 @@ var COLTYPE_JAVATYPE ={
     "datetime2"  : "java.sql.Timestamp"
 }
 
+/** マルチプルインサートを出力するか(要:SQL-92) */
+var FLG_MYBATIS_MULTIPLE_INSERT = true;
+
 /* ************************************************** *\
  *
  * 以下、処理本文
@@ -543,7 +546,6 @@ var gen;
                 writer.w(' * UPDATE文');
                 writer.w(' *');
                 writer.w(' * @param entity 更新項目');
-                writer.w(' * @param query 更新条件');
                 writer.w(' *');
                 writer.w(' * @return 更新行数');
                 writer.w(' */');
@@ -579,10 +581,21 @@ var gen;
             writer.w(' */');
             writer.w('int deleteByQuery(@Param("query") Entity query);');
             writer.w("");
+            if (FLG_MYBATIS_MULTIPLE_INSERT) {
+                writer.w('/**');
+                writer.w(' * INSERT MULTIPLE ROW文');
+                writer.w(' *');
+                writer.w(' * @param insertList 登録対象一覧');
+                writer.w(' *');
+                writer.w(' * @return 登録件数');
+                writer.w(' */');
+                writer.w('int insertMulti(@Param("insertList") List<? extends Entity> insertList);');
+                writer.w("");
+            }
             writer.w('/**');
             writer.w(' * テーブルの行を示すためのBeanクラス');
             writer.w(' */');
-            writer.w('public static Entity implements Serializable {');
+            writer.w('public static class Entity implements Serializable {');
             writer.indent();
             // フィールド
             for (var _i = 0, _a = table.columns; _i < _a.length; _i++) {
@@ -594,13 +607,13 @@ var gen;
             // セッターとゲッター
             for (var _b = 0, _c = table.columns; _b < _c.length; _b++) {
                 var column = _c[_b];
-                var javaNameU = column.javaName.charAt(0).toUpperCase() + column.javaName.substring(1);
+                var javaNameKey = column.javaName.charAt(0).toUpperCase() + column.javaName.substring(1);
                 writer.w("/**");
                 writer.w(" * " + column.logicalName + "を設定します");
                 writer.w(" *");
                 writer.w(" * @param " + column.javaName + " " + column.logicalName);
                 writer.w(" */");
-                writer.w("private void set" + javaNameU + "(" + column.javaTypeSimple + " " + column.javaName + ") {");
+                writer.w("public void set" + javaNameKey + "(" + column.javaTypeSimple + " " + column.javaName + ") {");
                 writer.indent();
                 writer.w("this." + column.javaName + " = " + column.javaName + ";");
                 writer.dedent();
@@ -611,7 +624,7 @@ var gen;
                 writer.w(" *");
                 writer.w(" * @return " + column.logicalName);
                 writer.w(" */");
-                writer.w("private " + column.javaTypeSimple + " get" + javaNameU + "() {");
+                writer.w("public " + column.javaTypeSimple + " get" + javaNameKey + "() {");
                 writer.indent();
                 writer.w("return this." + column.javaName + ";");
                 writer.dedent();
@@ -624,30 +637,60 @@ var gen;
                 var constructorArgs = [];
                 for (var _d = 0, _e = table.primeColumns; _d < _e.length; _d++) {
                     var column = _e[_d];
-                    var javaNameU = column.javaName.charAt(0).toUpperCase() + column.javaName.substring(1);
-                    constructorArgs.push(column.javaTypeSimple + ' key' + javaNameU);
+                    var javaNameKey = 'key' + column.javaName.charAt(0).toUpperCase() + column.javaName.substring(1);
+                    constructorArgs.push(column.javaTypeSimple + ' ' + javaNameKey);
                 }
                 writer.w('');
                 writer.w('/**');
                 writer.w(' * テーブルの行を示すためのBeanクラス');
                 writer.w(' */');
-                writer.w('public static EntityWithKey extends Entity implements Serializable {');
+                writer.w('public static class EntityWithKey extends Entity implements Serializable {');
                 writer.indent();
+                // フィールド
                 for (var _f = 0, _g = table.primeColumns; _f < _g.length; _f++) {
                     var column = _g[_f];
-                    var javaNameU = 'key' + column.javaName.charAt(0).toUpperCase() + column.javaName.substring(1);
-                    writer.w('private ' + column.javaTypeSimple + ' ' + javaNameU + ';');
+                    var javaNameKey = 'key' + column.javaName.charAt(0).toUpperCase() + column.javaName.substring(1);
+                    writer.w('private ' + column.javaTypeSimple + ' ' + javaNameKey + ';');
                 }
                 writer.w('');
+                // コンストラクタ
                 writer.w('public EntityWithKey(' + constructorArgs.join(', ') + ') {');
                 writer.indent();
                 for (var _h = 0, _j = table.primeColumns; _h < _j.length; _h++) {
                     var column = _j[_h];
-                    var javaNameU = 'key' + column.javaName.charAt(0).toUpperCase() + column.javaName.substring(1);
-                    writer.w('this.' + javaNameU + ' = ' + javaNameU + ';');
+                    var javaNameKey = 'key' + column.javaName.charAt(0).toUpperCase() + column.javaName.substring(1);
+                    writer.w('this.' + javaNameKey + ' = ' + javaNameKey + ';');
                 }
                 writer.dedent();
                 writer.w('}');
+                // セッターとゲッター
+                for (var _k = 0, _l = table.primeColumns; _k < _l.length; _k++) {
+                    var column = _l[_k];
+                    var javaNameKey = 'key' + column.javaName.charAt(0).toUpperCase() + column.javaName.substring(1);
+                    var javaNameKeyU = javaNameKey.charAt(0).toUpperCase() + javaNameKey.substring(1);
+                    writer.w("/**");
+                    writer.w(" * " + column.logicalName + "を設定します");
+                    writer.w(" *");
+                    writer.w(" * @param " + column.javaName + " " + column.logicalName);
+                    writer.w(" */");
+                    writer.w("public void set" + javaNameKeyU + "(" + column.javaTypeSimple + " " + column.javaName + ") {");
+                    writer.indent();
+                    writer.w("this." + javaNameKey + " = " + column.javaName + ";");
+                    writer.dedent();
+                    writer.w("}");
+                    writer.w("");
+                    writer.w("/**");
+                    writer.w(" * " + column.logicalName + "を取得します");
+                    writer.w(" *");
+                    writer.w(" * @return " + column.logicalName);
+                    writer.w(" */");
+                    writer.w("public " + column.javaTypeSimple + " get" + javaNameKeyU + "() {");
+                    writer.indent();
+                    writer.w("return this." + javaNameKey + ";");
+                    writer.dedent();
+                    writer.w("}");
+                    writer.w("");
+                }
                 writer.dedent();
                 writer.w('}');
             }
@@ -683,6 +726,8 @@ var gen;
         var writer = null;
         try {
             writer = new ScriptWriter(objFSO.BuildPath(workDir, filebase + ".xml"));
+            writer.w('<?xml version="1.0" encoding="UTF-8" ?>');
+            writer.w('<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">');
             writer.w("<mapper namespace='" + fqcn + "'>");
             writer.indent();
             // ResultMapping
@@ -699,7 +744,7 @@ var gen;
                 writer.indent();
                 for (var _i = 0, _a = table.primeColumns; _i < _a.length; _i++) {
                     var column = _a[_i];
-                    writer.w('<idArg column="' + column.columnName + '" />');
+                    writer.w('<idArg column="' + column.columnName + '" javaType="' + column.javaType + '" />');
                 }
                 writer.dedent();
                 writer.w('</constructor>');
@@ -751,6 +796,20 @@ var gen;
             writer.dedent();
             writer.w("</delete>");
             writer.w("");
+            if (FLG_MYBATIS_MULTIPLE_INSERT) {
+                // insert multi row
+                writer.w('<insert id="insertMulti" databaseId="Oracle" >');
+                writer.indent();
+                makeInsertMultiSqlForOracle(writer, table);
+                writer.dedent();
+                writer.w('</insert>');
+                writer.w('');
+                writer.w('<insert id="insertMulti">');
+                writer.indent();
+                makeInsertMultiSqlForSQL92(writer, table);
+                writer.dedent();
+                writer.w('</insert>');
+            }
             writer.dedent();
             writer.w("</mapper>");
         }
@@ -833,7 +892,8 @@ var gen;
             firstColumn = false;
         }
         out.dedent();
-        out.w(") VALUES (");
+        out.w(")");
+        out.w("VALUES (");
         out.indent();
         var firstValue = true;
         for (var _b = 0, _c = table.columns; _b < _c.length; _b++) {
@@ -844,6 +904,71 @@ var gen;
         }
         out.dedent();
         out.w(")");
+    }
+    function makeInsertMultiSqlForSQL92(out, table) {
+        out.w("INSERT INTO");
+        out.indent().w(table.tableName).dedent();
+        out.w("(");
+        out.indent();
+        var firstColumn = true;
+        for (var _i = 0, _a = table.columns; _i < _a.length; _i++) {
+            var column = _a[_i];
+            var prefix = firstColumn ? " " : ",";
+            out.w(prefix + column.columnName);
+            firstColumn = false;
+        }
+        out.dedent();
+        out.w(")");
+        out.w('<trim prefix="VALUES " suffixOverrides="," suffix=" " >');
+        out.indent();
+        out.w('<foreach item="entity" collection="insertList">');
+        out.indent();
+        out.w("(");
+        out.indent();
+        var firstValue = true;
+        for (var _b = 0, _c = table.columns; _b < _c.length; _b++) {
+            var column = _c[_b];
+            var prefix = firstValue ? " " : ",";
+            out.w(prefix + "#{entity." + column.javaName + "}");
+            firstValue = false;
+        }
+        out.dedent();
+        out.w('),');
+        out.dedent();
+        out.w('</foreach>');
+        out.dedent();
+        out.w("</trim>");
+    }
+    function makeInsertMultiSqlForOracle(out, table) {
+        out.w('INSERT ALL');
+        out.w('<foreach item="entity" collection="insertList">');
+        out.indent();
+        out.w("INTO " + table.tableName);
+        out.w("(");
+        out.indent();
+        var firstColumn = true;
+        for (var _i = 0, _a = table.columns; _i < _a.length; _i++) {
+            var column = _a[_i];
+            var prefix = firstColumn ? " " : ",";
+            out.w(prefix + column.columnName);
+            firstColumn = false;
+        }
+        out.dedent();
+        out.w(")");
+        out.w("VALUES (");
+        out.indent();
+        var firstValue = true;
+        for (var _b = 0, _c = table.columns; _b < _c.length; _b++) {
+            var column = _c[_b];
+            var prefix = firstValue ? " " : ",";
+            out.w(prefix + "#{entity." + column.javaName + "}");
+            firstValue = false;
+        }
+        out.dedent();
+        out.w(")");
+        out.dedent();
+        out.w('</foreach>');
+        out.w('SELECT * FROM DUAL');
     }
     function makeUpdateSql(out, table) {
         out.w("UPDATE");
@@ -957,18 +1082,16 @@ var gen;
                 writer.w(' */');
             }
             writer.w('@Entity(name = "' + table.tableName + '")');
-            writer.w('public static ' + filebase + ' {');
+            writer.w('public class ' + filebase + ' {');
             writer.indent();
             // フィールド
             for (var _i = 0, _a = table.columns; _i < _a.length; _i++) {
                 var column = _a[_i];
                 writer.w("/** " + column.logicalName + " */");
                 if (column.keyPosition) {
-                    writer.w('@Id(name="' + column.columnName + '")');
+                    writer.w('@Id');
                 }
-                else {
-                    writer.w('@Column(name="' + column.columnName + '")');
-                }
+                writer.w('@Column(name="' + column.columnName + '")');
                 writer.w("private " + column.javaTypeSimple + " " + column.javaName + ";");
                 writer.w("");
             }
@@ -981,7 +1104,7 @@ var gen;
                 writer.w(" *");
                 writer.w(" * @param " + column.javaName + " " + column.logicalName);
                 writer.w(" */");
-                writer.w("private void set" + javaNameU + "(" + column.javaTypeSimple + " " + column.javaName + ") {");
+                writer.w("public void set" + javaNameU + "(" + column.javaTypeSimple + " " + column.javaName + ") {");
                 writer.indent();
                 writer.w("this." + column.javaName + " = " + column.javaName + ";");
                 writer.dedent();
@@ -992,7 +1115,7 @@ var gen;
                 writer.w(" *");
                 writer.w(" * @return " + column.logicalName);
                 writer.w(" */");
-                writer.w("private " + column.javaTypeSimple + " get" + javaNameU + "() {");
+                writer.w("public " + column.javaTypeSimple + " get" + javaNameU + "() {");
                 writer.indent();
                 writer.w("return this." + column.javaName + ";");
                 writer.dedent();

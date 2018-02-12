@@ -1,0 +1,10 @@
+TABLE_CATALOG,TABLE_SCHEMA,TABLE_NAME,COLUMN_NAME,LOGICAL_NAME,ORDINAL_POSITION,COLUMN_DEFAULT,IS_NULLABLE,DATA_TYPE,KEY_POSITION,DESCRIPTION
+localhost/mysql,test_db,info,Test,Column info here,1,,NO,varchar(512),,
+localhost/mysql,test_db,info2,Test,Column info here,1,,NO,varchar(512),,
+localhost/mysql,test_db,info2,Tes2t,"Column, in""fo here",2,,NO,tinyint(1),,
+localhost/mysql,test_db,info3,id_1,手記1,1,,NO,"decimal(12,0)",1,
+localhost/mysql,test_db,info3,id_2,手記2,2,,NO,char(4),2,
+localhost/mysql,test_db,info3,col_a,カラムa,3,,NO,date,,
+localhost/mysql,test_db,info3,col_b,カラムb,4,,NO,datetime,,
+localhost/mysql,test_db,info3,col_c,カラムc,5,,NO,varchar(512),,
+localhost/mysql,test_db,info3,Tes2t,"Column, in""fo here",6,,NO,tinyint(1),,

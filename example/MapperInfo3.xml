@@ -1,0 +1,169 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace='jp.co.java_conf.tyun.mybatistest.MapperInfo3'>
+    <resultMap id="resultMapEntity" type="jp.co.java_conf.tyun.mybatistest.MapperInfo3$Entity">
+        <id     column="id_1"     property="id1"    />
+        <id     column="id_2"     property="id2"    />
+        <result column="col_a"    property="colA"   />
+        <result column="col_b"    property="colB"   />
+        <result column="col_c"    property="colC"   />
+        <result column="Tes2t"    property="tes2t"  />
+    </resultMap>
+    
+    <resultMap id="resultMapEntityWithKey" type="jp.co.java_conf.tyun.mybatistest.MapperInfo3$EntityWithKey" extends="resultMapEntity">
+        <constructor>
+            <idArg column="id_1" javaType="java.math.BigDecimal" />
+            <idArg column="id_2" javaType="String" />
+        </constructor>
+    </resultMap>
+    
+    <select id="select" resultMap="resultMapEntityWithKey">
+        SELECT
+             id_1
+            ,id_2
+            ,col_a
+            ,col_b
+            ,col_c
+            ,Tes2t
+        FROM
+            info3
+        <where>
+            <if test="query.id1   != null ">AND id_1   = #{query.id1}   </if>
+            <if test="query.id2   != null ">AND id_2   = #{query.id2}   </if>
+            <if test="query.colA  != null ">AND col_a  = #{query.colA}  </if>
+            <if test="query.colB  != null ">AND col_b  = #{query.colB}  </if>
+            <if test="query.colC  != null ">AND col_c  = #{query.colC}  </if>
+            <if test="query.tes2t != null ">AND Tes2t  = #{query.tes2t} </if>
+        </where>
+    </select>
+    
+    <insert id="insert">
+        INSERT INTO
+            info3
+        (
+             id_1
+            ,id_2
+            ,col_a
+            ,col_b
+            ,col_c
+            ,Tes2t
+        )
+        VALUES (
+             #{entity.id1}
+            ,#{entity.id2}
+            ,#{entity.colA}
+            ,#{entity.colB}
+            ,#{entity.colC}
+            ,#{entity.tes2t}
+        )
+    </insert>
+    
+    <update id="updateByKey">
+        UPDATE
+            info3
+        <set>
+            <if test="entity.id1   != null ">id_1   = #{entity.id1}    , </if>
+            <if test="entity.id2   != null ">id_2   = #{entity.id2}    , </if>
+            <if test="entity.colA  != null ">col_a  = #{entity.colA}   , </if>
+            <if test="entity.colB  != null ">col_b  = #{entity.colB}   , </if>
+            <if test="entity.colC  != null ">col_c  = #{entity.colC}   , </if>
+            <if test="entity.tes2t != null ">Tes2t  = #{entity.tes2t}  , </if>
+        </set>
+        <where>
+            AND id_1   = #{entity.keyId1}   
+            AND id_2   = #{entity.keyId2}   
+        </where>
+    </update>
+    
+    <delete id="deleteByKey">
+        DELETE FROM
+            info3
+        <where>
+            AND id_1   = #{query.keyId1}   
+            AND id_2   = #{query.keyId2}   
+        </where>
+    </delete>
+    
+    <update id="updateByQuery">
+        UPDATE
+            info3
+        <set>
+            <if test="entity.id1   != null ">id_1   = #{entity.id1}    , </if>
+            <if test="entity.id2   != null ">id_2   = #{entity.id2}    , </if>
+            <if test="entity.colA  != null ">col_a  = #{entity.colA}   , </if>
+            <if test="entity.colB  != null ">col_b  = #{entity.colB}   , </if>
+            <if test="entity.colC  != null ">col_c  = #{entity.colC}   , </if>
+            <if test="entity.tes2t != null ">Tes2t  = #{entity.tes2t}  , </if>
+        </set>
+        <where>
+            <if test="query.id1   != null ">AND id_1   = #{entity.id1}   </if>
+            <if test="query.id2   != null ">AND id_2   = #{entity.id2}   </if>
+            <if test="query.colA  != null ">AND col_a  = #{entity.colA}  </if>
+            <if test="query.colB  != null ">AND col_b  = #{entity.colB}  </if>
+            <if test="query.colC  != null ">AND col_c  = #{entity.colC}  </if>
+            <if test="query.tes2t != null ">AND Tes2t  = #{entity.tes2t} </if>
+        </where>
+    </update>
+    
+    <delete id="deleteByQuery">
+        DELETE FROM
+            info3
+        <where>
+            <if test="query.id1   != null ">AND id_1   = #{query.id1}   </if>
+            <if test="query.id2   != null ">AND id_2   = #{query.id2}   </if>
+            <if test="query.colA  != null ">AND col_a  = #{query.colA}  </if>
+            <if test="query.colB  != null ">AND col_b  = #{query.colB}  </if>
+            <if test="query.colC  != null ">AND col_c  = #{query.colC}  </if>
+            <if test="query.tes2t != null ">AND Tes2t  = #{query.tes2t} </if>
+        </where>
+    </delete>
+    
+    <insert id="insertMulti" databaseId="Oracle" >
+        INSERT ALL
+        <foreach item="entity" collection="insertList">
+            INTO info3
+            (
+                 id_1
+                ,id_2
+                ,col_a
+                ,col_b
+                ,col_c
+                ,Tes2t
+            )
+            VALUES (
+                 #{entity.id1}
+                ,#{entity.id2}
+                ,#{entity.colA}
+                ,#{entity.colB}
+                ,#{entity.colC}
+                ,#{entity.tes2t}
+            )
+        </foreach>
+        SELECT * FROM DUAL
+    </insert>
+    
+    <insert id="insertMulti">
+        INSERT INTO
+            info3
+        (
+             id_1
+            ,id_2
+            ,col_a
+            ,col_b
+            ,col_c
+            ,Tes2t
+        )
+        <trim prefix="VALUES " suffixOverrides="," suffix=" " >
+            <foreach item="entity" collection="insertList">
+                (
+                     #{entity.id1}
+                    ,#{entity.id2}
+                    ,#{entity.colA}
+                    ,#{entity.colB}
+                    ,#{entity.colC}
+                    ,#{entity.tes2t}
+                ),
+            </foreach>
+        </trim>
+    </insert>
+</mapper>

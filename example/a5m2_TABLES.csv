@@ -1,0 +1,4 @@
+TABLE_CATALOG,TABLE_SCHEMA,TABLE_NAME,LOGICAL_NAME,TABLE_TYPE,DESCRIPTION,TAG
+localhost/mysql,test_db,info,‚ ,,,
+localhost/mysql,test_db,info2,‚¢,,,
+localhost/mysql,test_db,info3,,,,
