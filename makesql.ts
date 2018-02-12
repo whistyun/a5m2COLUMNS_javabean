@@ -4,7 +4,7 @@
  * 
 \* ************************************************** */
 
-/** 出力時のパッケージ */
+/** 出力時のパッケージ(デフォルト) */
 var JAVA_PACKAGE = "com.example";
 
 /** 
@@ -12,6 +12,12 @@ var JAVA_PACKAGE = "com.example";
  * "MyBatis", "JPA", "ALL"
  */
 var OUTPUT_MODE = "ALL";
+
+/** 
+ * 出力先フォルダ
+ * 未指定の場合は、入力元と同じ
+ */
+var OUTPUT_DIR  = "";
 
 /** DBカラムのデータ型と、オブジェクトの型のマッピング */
 var COLTYPE_JAVATYPE ={
@@ -23,7 +29,7 @@ var COLTYPE_JAVATYPE ={
     "double"     : "java.math.BigDecimal",
     "float"      : "java.math.BigDecimal",
     //文字列
-    "char"       : "String",                 // コード値に利用されることがあるchar、DDL上の桁数に対して、使うコードの長さが小さいことがよくある
+    "char"       : "String",                 // コード値に利用されることがあるchar、DDL上の桁数に対して、使うコードの長さが小さいことがよくある。
     "varchar"    : "String",
     "varchar2"   : "String",
     //日付・時刻
@@ -42,27 +48,44 @@ var COLTYPE_JAVATYPE ={
 
 // チェック：引数は指定されている？
 if(WScript.Arguments.length < 1){
-    var errMsg = "CSVファイルを指定してください";
+    var errMsg = "CSVファイルを指定してください\r\n";
+    
+    errMsg += "\r\n";
+    errMsg += "[使用方法]" + "\r\n";
+    errMsg += "　引数1 　　　　　 　a5m2_COLUMNS.csvへのファイルパス" + "\r\n";
+    errMsg += "　引数2(オプション)　javaのパッケージ名。デフォルトは"+ JAVA_PACKAGE + "\r\n";
+    errMsg += "　引数3(オプション)　ファイル出力先。デフォルトは入力元と同じフォルダ" + "\r\n";
+
     WScript.Echo(errMsg);
     WScript.Quit(-1);
 }
 
-// チェック：ファイルは存在する？
 var objFSO = new ActiveXObject("Scripting.FileSystemObject");
-if( !objFSO.FileExists(WScript.Arguments.Item(0)) ){
+
+// CSVファイル(大元)
+var csvFile = WScript.Arguments.Item(0);
+// パッケージ名
+var jpack = WScript.Arguments.length>=2? WScript.Arguments.Item(1): JAVA_PACKAGE;
+// 出力先
+var workDir = WScript.Arguments.length>=3? WScript.Arguments.Item(2):
+              (OUTPUT_DIR && OUTPUT_DIR.length!=0)? OUTPUT_DIR: objFSO.GetParentFolderName(objFSO.GetAbsolutePathName(csvFile));
+// 出力モード(JPA, MyBatis)
+var mode = OUTPUT_MODE;
+
+// チェック：ファイルは存在する？
+if( !objFSO.FileExists(csvFile) ){
     var errMsg = "ファイルが空です";
     WScript.Echo(errMsg);
     WScript.Quit(-1);
 }
 
-// CSVファイル(大元)
-var csvFile = WScript.Arguments.Item(0);
-// パッケージ名
-var jpack = JAVA_PACKAGE;
-// 出力モード(JPA, MyBatis)
-var mode = OUTPUT_MODE;
-// 出力先
-var workDir = objFSO.GetParentFolderName(csvFile);
+// チェック：出力先フォルダは存在する？
+if( !objFSO.FolderExists(workDir) ){
+    var errMsg = "指定されたフォルダは存在しません";
+    WScript.Echo(errMsg);
+    WScript.Quit(-1);
+}
+
 
 namespace utility{
     export class Set{
