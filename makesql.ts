@@ -223,6 +223,12 @@ namespace csvload{
                 // 解決できなかった場合、桁数情報を排除したうえで再度検索
                 this.javaType    = typeConvertMap[columnType.toLowerCase().replace(/\(.+\)/g, "")];
             }
+            if(! this.javaType){
+                // それでも、解決できなかった場合はエラー
+                WScript.Echo("テーブルの型「" + columnType +"」に対応するjavaの型を見つけることができませんでした。COLTYPE_JAVATYPEへ定義の追加をしてください");
+                WScript.Quit(1);
+            }
+
             if(this.javaType){
                 var li = this.javaType.lastIndexOf('.');
                 if(li==-1){
